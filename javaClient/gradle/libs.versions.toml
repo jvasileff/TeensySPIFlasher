@@ -4,7 +4,7 @@
 [versions]
 guava = "33.4.6-jre"
 junit-jupiter = "5.12.1"
-jserialcomm = "2.11.2"
+jserialcomm = "2.11.4"
 picocli = "4.7.6"
 
 [libraries]
