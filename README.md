@@ -13,10 +13,16 @@ It is partially based on hjudge's [SPIway utility](https://github.com/hjudges/NO
 This has been tested with the NOR chip still attached to the motherboard.
 
 # Requirements
-## Python Setup
+## Client Setup
 Requirements:
-- Python 2.7
-- pyserial 2.5
+- A JDK. The client is built and tested with Java 25.
+
+The client lives in `javaClient` and builds with the included Gradle wrapper:
+
+> `cd javaClient`
+> `./gradlew installDist`
+
+This produces `app/build/install/spi-flasher/bin/spi-flasher` (`spi-flasher.bat` on Windows). With GraalVM installed, `./gradlew nativeCompile` builds a standalone native executable instead.
 
 ## Teensy Software Setup
 I am not distributing a `.hex` file because I haven't added a way to adjust the read/write clock speeds. You may need to adjust them to find values that are stable for your chip.
@@ -39,20 +45,26 @@ For the Teensy 4.0 or 4.1, use the following pins:
 - **HOLD#/RESET#**: Pin 15
 
 # Usage
-This is designed to work just like `SPIway` (see the [SPIway README](https://github.com/hjudges/NORway/blob/master/SPIway_README.txt)). After compiling and deploying the code to your Teensy, connect your PC to the Teensy over USB. You can check *Windows Device Manager > Ports (COM & LPT)* to find which COM port is assigned to the Teensy.
+This is designed to work much like `SPIway` (see the [SPIway README](https://github.com/hjudges/NORway/blob/master/SPIway_README.txt)). After compiling and deploying the code to your board, connect your PC to the board over USB. List the serial ports to find which one is assigned to it:
 
-First, confirm that your Teensy can read from the NOR chip and recognizes it:
+> `spi-flasher list-ports`
 
-> `TeensySPIFlasher.py COMx info`
+First, confirm that the board can read from the NOR chip and recognizes it:
 
-Dump the ROM contents (run this command multiple times and confirm the checksums match):
+> `spi-flasher --port COMx info`
 
-> `TeensySPIFlasher.py COMx dump filename`
+Dump the ROM contents (the dump is read back and verified by default):
+
+> `spi-flasher --port COMx read filename`
 
 Write a new ROM to the chip and verify the contents are correct:
 
-> `TeensySPIFlasher.py COMx vwrite filename`
+> `spi-flasher --port COMx write filename`
+
+Verify the chip against a file without writing:
+
+> `spi-flasher --port COMx verify filename`
 
 Erase the chip:
 
-> `TeensySPIFlasher.py COMx erasechip`
+> `spi-flasher --port COMx erase-chip`

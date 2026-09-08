@@ -39,7 +39,7 @@ public class Client implements AutoCloseable {
             throw new ReportableException("Invalid serial port: " + port, e);
         }
 
-        // Configure serial port settings to match Python code
+        // Configure serial port settings (the baud rate is ignored by USB CDC ports)
         serialPort.setBaudRate(115200);
         serialPort.setNumDataBits(8);
         serialPort.setNumStopBits(1);

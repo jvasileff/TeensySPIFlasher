@@ -80,11 +80,11 @@
 #define SPI_SECURITY_WPSEL		0b10000000  // Status register write disable set
 
 
-/*************************\
-| Python script constants |
-\*************************/
+/***************************\
+| Client protocol constants |
+\***************************/
 
-// Some constants for interacting with our Python script
+// Some constants for interacting with the client
 #define VERSION_MAJOR		((uint8_t) 0)
 #define VERSION_MINOR		((uint8_t) 2)
 
