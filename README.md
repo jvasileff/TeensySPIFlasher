@@ -31,9 +31,9 @@ Follow [this guide](https://www.pjrc.com/teensy/td_download.html) to install the
 
 To compile the code, simply open `TeensySPIFlasher/TeensySPIFlasher.ino` in the Arduino IDE and click "Verify". To deploy the code, you can click the "Upload" button from within the Arduino IDE, or you can open the build folder and deploy the `.hex` file manually.
 
-The sketch also builds for the Waveshare RP2040-Zero. See [BUILDING.md](BUILDING.md) for installing board support for both boards and for flashing either one from the command line.
+The sketch also builds for the Waveshare RP2040-Zero and the Raspberry Pi Pico. See [BUILDING.md](BUILDING.md) for installing board support and for flashing any of the boards from the command line.
 
-## Teensy Hardware Setup
+## Hardware Setup
 Follow the [MODDED WARFARE guide](https://www.youtube.com/watch?v=JxeSP1PJtEs) for installing a Teensy to quickly revert the PS4's hardware.
 
 For the Teensy 4.0 or 4.1, use the following pins:
@@ -43,6 +43,16 @@ For the Teensy 4.0 or 4.1, use the following pins:
 - **SCLK**: Pin 13
 - **WP#/SIO2**: Pin 14
 - **HOLD#/RESET#**: Pin 15
+
+For the Waveshare RP2040-Zero or the Raspberry Pi Pico, use the following pins:
+- **CS#**: GP14
+- **SI/SIO0**: GP27
+- **SO/SIO1**: GP28
+- **SCLK**: GP26
+- **WP#/SIO2**: GP15
+- **HOLD#/RESET#**: GP8
+
+Power the flash chip from the board's 3V3 pin and share ground. All of these boards use 3.3 V I/O, so no level shifting is needed.
 
 # Usage
 This is designed to work much like `SPIway` (see the [SPIway README](https://github.com/hjudges/NORway/blob/master/SPIway_README.txt)). After compiling and deploying the code to your board, connect your PC to the board over USB. List the serial ports to find which one is assigned to it:

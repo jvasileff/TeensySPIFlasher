@@ -4,26 +4,30 @@
 /*********************\
 | Board configuration |
 \*********************/
-// Pin assignments per board. The chip select is driven manually with digitalWrite,
-// so it does not need to be the SPI peripheral's hardware CS pin.
+// Pin assignments and SPI peripheral per board. The chip select is driven
+// manually with digitalWrite, so it does not need to be the SPI peripheral's
+// hardware CS pin.
 #if defined(ARDUINO_TEENSY40) || defined(ARDUINO_TEENSY41)
   // The SPI library uses these pins by default on Teensy 4.0 and 4.1:
   // - SS    Pin 10    CS# / Chip select
   // - MOSI  Pin 11    SI/SIO0 / Controller Out Peripheral In
   // - MISO  Pin 12    SO/SIO1 / Controller In Peripheral Out
   // - SCK   Pin 13    SCLK / Clock
+  #define FLASH_SPI     SPI
   #define CHIP_SELECT   SS
   #define WRITE_PROTECT 14  // WP#/SIO2
   #define RESET         15  // RESET#/SIO3
-#elif defined(ARDUINO_WAVESHARE_RP2040_ZERO)
-  // The RP2040-Zero does not expose GP16-GP19, the default SPI0 pins, so use
-  // the GP0-GP3 SPI0 group instead (GP4-GP7 is the other valid group).
-  #define SPI_PIN_MISO  0   // SO/SIO1 / Controller In Peripheral Out
-  #define CHIP_SELECT   1   // CS# / Chip select
-  #define SPI_PIN_SCK   2   // SCLK / Clock
-  #define SPI_PIN_MOSI  3   // SI/SIO0 / Controller Out Peripheral In
-  #define WRITE_PROTECT 4   // WP#/SIO2
-  #define RESET         5   // RESET#/SIO3
+#elif defined(ARDUINO_WAVESHARE_RP2040_ZERO) || defined(ARDUINO_RASPBERRY_PI_PICO)
+  // Use SPI1 on GP26-GP28, which sit together on one edge of the RP2040-Zero.
+  // Every pin here is also on the official Pico header, so the same wiring
+  // works on both boards.
+  #define FLASH_SPI     SPI1
+  #define SPI_PIN_SCK   26  // SCLK / Clock
+  #define SPI_PIN_MOSI  27  // SI/SIO0 / Controller Out Peripheral In
+  #define SPI_PIN_MISO  28  // SO/SIO1 / Controller In Peripheral Out
+  #define CHIP_SELECT   14  // CS# / Chip select
+  #define WRITE_PROTECT 15  // WP#/SIO2
+  #define RESET         8   // RESET#/SIO3
 #else
   #error "Unsupported board: add a pin mapping for it above"
 #endif
@@ -147,14 +151,14 @@ void sendScriptInfo() {
 
 void sendSpiInfo() {
   // Get SPI info
-  SPI.beginTransaction(SPISettings(CHIP_READ_SPEED, DATA_ORDER, DATA_MODE));
+  FLASH_SPI.beginTransaction(SPISettings(CHIP_READ_SPEED, DATA_ORDER, DATA_MODE));
   digitalWrite(CHIP_SELECT, LOW);
-  SPI.transfer((uint8_t) SPI_COMMAND_RDID);
-  uint8_t manufacturerId = SPI.transfer(0);
-  uint8_t memoryType = SPI.transfer(0);
-  uint8_t capacityCode = SPI.transfer(0);
+  FLASH_SPI.transfer((uint8_t) SPI_COMMAND_RDID);
+  uint8_t manufacturerId = FLASH_SPI.transfer(0);
+  uint8_t memoryType = FLASH_SPI.transfer(0);
+  uint8_t capacityCode = FLASH_SPI.transfer(0);
   digitalWrite(CHIP_SELECT, HIGH);
-  SPI.endTransaction();
+  FLASH_SPI.endTransaction();
 
   // Update local chip configuration info
   if (manufacturerId == 0xC2) { // Macronix
@@ -179,29 +183,29 @@ void readBlock() {
   }
   Serial.write(REQ_SUCCESS);
 
-  SPI.beginTransaction(SPISettings(CHIP_READ_SPEED, DATA_ORDER, DATA_MODE));
+  FLASH_SPI.beginTransaction(SPISettings(CHIP_READ_SPEED, DATA_ORDER, DATA_MODE));
   digitalWrite(CHIP_SELECT, LOW);
-  SPI.transfer(SPI_COMMAND_READ4B);
+  FLASH_SPI.transfer(SPI_COMMAND_READ4B);
   for (uint8_t i = 0; i < ADDRESS_BUFFER_SIZE; i++) {
-    SPI.transfer(addressBuffer[i]);
+    FLASH_SPI.transfer(addressBuffer[i]);
   }
 
   // Read entire block, one byte at a time
   for (uint32_t chunk = 0; chunk < (SPI_BLOCK_SIZE / DATA_BUFFER_SIZE); chunk++) {
     for (uint32_t i = 0; i < DATA_BUFFER_SIZE; i++) {
-      dataBuffer[i] = SPI.transfer(0);
+      dataBuffer[i] = FLASH_SPI.transfer(0);
     }
     Serial.write(dataBuffer, DATA_BUFFER_SIZE);
   }
   digitalWrite(CHIP_SELECT, HIGH);
-  SPI.endTransaction();
+  FLASH_SPI.endTransaction();
   Serial.flush();
 }
 
 uint8_t getStatus() {
   digitalWrite(CHIP_SELECT, LOW);
-  SPI.transfer(SPI_COMMAND_RDSR);
-  uint8_t status = SPI.transfer(0);
+  FLASH_SPI.transfer(SPI_COMMAND_RDSR);
+  uint8_t status = FLASH_SPI.transfer(0);
   digitalWrite(CHIP_SELECT, HIGH);
   return status;
 }
@@ -212,18 +216,18 @@ uint8_t getSecurityStatus() {
   }
 
   digitalWrite(CHIP_SELECT, LOW);
-  SPI.transfer(SPI_COMMAND_RDSCUR);
-  uint8_t securityStatus = SPI.transfer(0);
+  FLASH_SPI.transfer(SPI_COMMAND_RDSCUR);
+  uint8_t securityStatus = FLASH_SPI.transfer(0);
   digitalWrite(CHIP_SELECT, HIGH);
   return securityStatus;
 }
 
 void busyWaitForWriteToComplete() {
     digitalWrite(CHIP_SELECT, LOW);
-    SPI.transfer(SPI_COMMAND_RDSR);
+    FLASH_SPI.transfer(SPI_COMMAND_RDSR);
 
     // The chip now sends the status register every cycle, so keep checking until WIP is clear
-    while ((SPI.transfer(0) & SPI_STATUS_WIP) != 0);
+    while ((FLASH_SPI.transfer(0) & SPI_STATUS_WIP) != 0);
 
     // Writing is complete
     digitalWrite(CHIP_SELECT, HIGH);
@@ -234,16 +238,16 @@ bool isWriteFlagEnabled() {
 }
 
 void setWriteEnableFlag() {
-  SPI.beginTransaction(SPISettings(CHIP_WRITE_SPEED, DATA_ORDER, DATA_MODE));
+  FLASH_SPI.beginTransaction(SPISettings(CHIP_WRITE_SPEED, DATA_ORDER, DATA_MODE));
   
   // Set the write flag and check that the status has been updated
   do {
     digitalWrite(CHIP_SELECT, LOW);
-    SPI.transfer(SPI_COMMAND_WREN);
+    FLASH_SPI.transfer(SPI_COMMAND_WREN);
     digitalWrite(CHIP_SELECT, HIGH);
   } while(!isWriteFlagEnabled());
 
-  SPI.endTransaction();
+  FLASH_SPI.endTransaction();
 }
 
 void eraseChip() {
@@ -252,9 +256,9 @@ void eraseChip() {
   setWriteEnableFlag();
   
   // Send command to erase the chip
-  SPI.beginTransaction(SPISettings(CHIP_WRITE_SPEED, DATA_ORDER, DATA_MODE));
+  FLASH_SPI.beginTransaction(SPISettings(CHIP_WRITE_SPEED, DATA_ORDER, DATA_MODE));
   digitalWrite(CHIP_SELECT, LOW);
-  SPI.transfer(SPI_COMMAND_CE);
+  FLASH_SPI.transfer(SPI_COMMAND_CE);
   digitalWrite(CHIP_SELECT, HIGH);
 
   busyWaitForWriteToComplete();
@@ -280,7 +284,7 @@ void eraseChip() {
     Serial.write(REQ_SUCCESS);
   }
   
-  SPI.endTransaction();
+  FLASH_SPI.endTransaction();
   Serial.flush();
 }
 
@@ -296,11 +300,11 @@ void eraseBlock() {
   setWriteEnableFlag();
   
   // Send command to erase the chip
-  SPI.beginTransaction(SPISettings(CHIP_WRITE_SPEED, DATA_ORDER, DATA_MODE));
+  FLASH_SPI.beginTransaction(SPISettings(CHIP_WRITE_SPEED, DATA_ORDER, DATA_MODE));
   digitalWrite(CHIP_SELECT, LOW);
-  SPI.transfer(SPI_COMMAND_BE4B);
+  FLASH_SPI.transfer(SPI_COMMAND_BE4B);
   for (uint8_t i = 0; i < ADDRESS_BUFFER_SIZE; i++) {
-    SPI.transfer(addressBuffer[i]);
+    FLASH_SPI.transfer(addressBuffer[i]);
   }
   digitalWrite(CHIP_SELECT, HIGH);
 
@@ -327,7 +331,7 @@ void eraseBlock() {
     Serial.write(REQ_SUCCESS);
   }
   
-  SPI.endTransaction();
+  FLASH_SPI.endTransaction();
   Serial.flush();
 }
 
@@ -348,14 +352,14 @@ void writeBlock() {
     // Enable write flag for each request
     setWriteEnableFlag();
 
-    SPI.beginTransaction(SPISettings(CHIP_WRITE_SPEED, DATA_ORDER, DATA_MODE));
+    FLASH_SPI.beginTransaction(SPISettings(CHIP_WRITE_SPEED, DATA_ORDER, DATA_MODE));
     digitalWrite(CHIP_SELECT, LOW);
-    SPI.transfer(SPI_COMMAND_PP4B);
+    FLASH_SPI.transfer(SPI_COMMAND_PP4B);
     // Some address trickery, courtesy of SPIway.c
-    SPI.transfer(addressBuffer[0]);
-    SPI.transfer(addressBuffer[1]);
-    SPI.transfer(addressBuffer[2] | page);
-    SPI.transfer(addressBuffer[3]);
+    FLASH_SPI.transfer(addressBuffer[0]);
+    FLASH_SPI.transfer(addressBuffer[1]);
+    FLASH_SPI.transfer(addressBuffer[2] | page);
+    FLASH_SPI.transfer(addressBuffer[3]);
 
     // Send page data
     for (uint32_t i = 0; i < SPI_PAGE_SIZE; i++) {
@@ -366,12 +370,12 @@ void writeBlock() {
         failedToReadPage = true;
         break;
       }
-      SPI.transfer(value);
+      FLASH_SPI.transfer(value);
     }
     digitalWrite(CHIP_SELECT, HIGH);
 
     if (failedToReadPage) {
-      SPI.endTransaction();
+      FLASH_SPI.endTransaction();
       break;
     }
 
@@ -380,7 +384,7 @@ void writeBlock() {
     // If any block protect bits are set or the status register is write-protected, assume this failed
     if ((getStatus() & (SPI_STATUS_BP0 | SPI_STATUS_BP1 | SPI_STATUS_BP2 | SPI_STATUS_BP3 | SPI_STATUS_SRWD)) != 0) {
       writeProtectionEnabled = true;
-      SPI.endTransaction();
+      FLASH_SPI.endTransaction();
       break;
     }
     // Some chips (like mine) have other registers we can check
@@ -389,16 +393,16 @@ void writeBlock() {
       
       if ((securityStatus & SPI_SECURITY_P_FAIL) != 0) {
         failedToWritePage = true;
-        SPI.endTransaction();
+        FLASH_SPI.endTransaction();
         break;
       } else if ((securityStatus & SPI_SECURITY_WPSEL) != 0) {
         writeProtectionEnabled = true;
-        SPI.endTransaction();
+        FLASH_SPI.endTransaction();
         break;
       }
     }
   
-    SPI.endTransaction();
+    FLASH_SPI.endTransaction();
   }
   
   // Re-enable write protection
@@ -427,13 +431,12 @@ void setup() {
   // Initialize serial and SPI comms
   Serial.begin(9600);   // Ignored: all supported boards present a USB CDC port, not a UART
 #if defined(ARDUINO_ARCH_RP2040)
-  // Route SPI0 to the pins chosen above before starting the peripheral
-  SPI.setRX(SPI_PIN_MISO);
-  SPI.setCS(CHIP_SELECT);
-  SPI.setSCK(SPI_PIN_SCK);
-  SPI.setTX(SPI_PIN_MOSI);
+  // Route the SPI peripheral to the pins chosen above before starting it
+  FLASH_SPI.setRX(SPI_PIN_MISO);
+  FLASH_SPI.setSCK(SPI_PIN_SCK);
+  FLASH_SPI.setTX(SPI_PIN_MOSI);
 #endif
-  SPI.begin();
+  FLASH_SPI.begin();
 
   // Configure the pins
   pinMode(CHIP_SELECT, OUTPUT);
