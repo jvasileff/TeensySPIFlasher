@@ -25,6 +25,8 @@ Follow [this guide](https://www.pjrc.com/teensy/td_download.html) to install the
 
 To compile the code, simply open `TeensySPIFlasher/TeensySPIFlasher.ino` in the Arduino IDE and click "Verify". To deploy the code, you can click the "Upload" button from within the Arduino IDE, or you can open the build folder and deploy the `.hex` file manually.
 
+The sketch also builds for the Waveshare RP2040-Zero. See [BUILDING.md](BUILDING.md) for installing board support for both boards and for flashing either one from the command line.
+
 ## Teensy Hardware Setup
 Follow the [MODDED WARFARE guide](https://www.youtube.com/watch?v=JxeSP1PJtEs) for installing a Teensy to quickly revert the PS4's hardware.
 
